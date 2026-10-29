@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "alamano",
+    "slug": "alamano",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "scheme": "alamano",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alamano.app"
+    },
+    "android": {
+      "package": "com.alamano.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    }
+  }
+}
