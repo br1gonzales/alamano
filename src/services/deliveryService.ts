@@ -6,12 +6,19 @@ import {
   DeliveryStatusLog,
   RestaurantStore,
 } from '../types/database';
+import {
+  generateTrackingCode,
+  generateReceptionCode,
+  verifyReceptionCode,
+  validateLastMileHandover,
+} from './handoverService';
 
-// Generate short human-friendly tracking code (e.g., "ALM-7392")
-export function generateTrackingCode(): string {
-  const num = Math.floor(1000 + Math.random() * 9000);
-  return `ALM-${num}`;
-}
+export {
+  generateTrackingCode,
+  generateReceptionCode,
+  verifyReceptionCode,
+  validateLastMileHandover,
+};
 
 export async function fetchDeliveries(storeId?: string): Promise<Delivery[]> {
   let query = supabase
@@ -108,11 +115,13 @@ export interface CreateDeliveryInput {
   packageDescription?: string;
   scheduledFor?: string | null;
   orderReferenceId?: string;
+  receptionCode?: string;
   autoAssignCourier?: boolean;
 }
 
 export async function createDelivery(input: CreateDeliveryInput): Promise<Delivery> {
   const trackingCode = generateTrackingCode();
+  const receptionCode = input.receptionCode || generateReceptionCode();
   const initialStatus: DeliveryStatus = input.scheduledFor
     ? 'scheduled'
     : input.autoAssignCourier
@@ -121,6 +130,7 @@ export async function createDelivery(input: CreateDeliveryInput): Promise<Delive
 
   const insertPayload = {
     tracking_code: trackingCode,
+    reception_code: receptionCode,
     store_id: input.storeId || null,
     status: initialStatus,
     pickup_address: input.pickupAddress,
@@ -232,6 +242,71 @@ export async function updateDeliveryStatus(
   });
 
   return data as Delivery;
+}
+
+/**
+ * Last Mile Handover: verifies the 4-digit reception code dictated by the recipient to the messenger.
+ * If valid, completes the delivery and records the verification timestamp.
+ */
+export async function verifyAndCompleteDelivery(
+  deliveryId: string,
+  inputCode: string
+): Promise<{ success: boolean; delivery?: Delivery; error?: string }> {
+  // 1. Fetch current delivery with expected reception_code
+  const { data: delivery, error: fetchErr } = await supabase
+    .from('deliveries')
+    .select('*')
+    .eq('id', deliveryId)
+    .single();
+
+  if (fetchErr || !delivery) {
+    return { success: false, error: 'No se encontró el envío para verificar entrega' };
+  }
+
+  // 2. Validate reception code
+  const isValid = verifyReceptionCode(delivery.reception_code, inputCode);
+  if (!isValid) {
+    // Log failed attempt
+    await supabase.from('delivery_status_logs').insert({
+      delivery_id: deliveryId,
+      status: delivery.status,
+      note: `Intento fallido de validación de entrega con código: "${inputCode}"`,
+    });
+    return {
+      success: false,
+      error: 'Código de entrega incorrecto. El cliente debe dictar el código de 4 dígitos exacto.',
+    };
+  }
+
+  // 3. Mark as delivered with timestamp
+  const now = new Date().toISOString();
+  const { data: updatedDelivery, error: updateErr } = await supabase
+    .from('deliveries')
+    .update({
+      status: 'delivered',
+      reception_verified_at: now,
+      updated_at: now,
+    })
+    .eq('id', deliveryId)
+    .select(`
+      *,
+      courier:couriers(*),
+      store:stores(id, name, address)
+    `)
+    .single();
+
+  if (updateErr) {
+    return { success: false, error: updateErr.message };
+  }
+
+  // 4. Log successful handover
+  await supabase.from('delivery_status_logs').insert({
+    delivery_id: deliveryId,
+    status: 'delivered',
+    note: `Código verificado exitosamente (${inputCode}). Paquete entregado al cliente en destino.`,
+  });
+
+  return { success: true, delivery: updatedDelivery as Delivery };
 }
 
 export async function fetchDeliveryLogs(deliveryId: string): Promise<DeliveryStatusLog[]> {

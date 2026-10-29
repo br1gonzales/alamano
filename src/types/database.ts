@@ -69,6 +69,8 @@ export interface Delivery {
   scheduled_for?: string | null;
   courier_id?: string | null;
   order_reference_id?: string | null;
+  reception_code: string; // 4-digit code recited by recipient to courier
+  reception_verified_at?: string | null;
   created_by?: string | null;
   created_at: string;
   updated_at: string;

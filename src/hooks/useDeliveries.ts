@@ -14,6 +14,7 @@ import {
   fetchDeliveryLogs,
   createDelivery,
   updateDeliveryStatus,
+  verifyAndCompleteDelivery,
   CreateDeliveryInput,
 } from '../services/deliveryService';
 import { getRouteBetweenPoints } from '../services/routingService';
@@ -28,24 +29,8 @@ import {
 } from '../types/database';
 import { supabase } from '../lib/supabase';
 
-// Query Keys Factory for structured TanStack Query cache keys
-export const deliveryKeys = {
-  all: ['deliveries'] as const,
-  lists: () => [...deliveryKeys.all, 'list'] as const,
-  list: (storeId?: string) => [...deliveryKeys.lists(), { storeId }] as const,
-  details: () => [...deliveryKeys.all, 'detail'] as const,
-  detail: (idOrCode: string) => [...deliveryKeys.details(), idOrCode] as const,
-  logs: (deliveryId: string) => [...deliveryKeys.detail(deliveryId), 'logs'] as const,
-  couriers: () => ['couriers'] as const,
-  stores: () => ['stores'] as const,
-  routes: () => ['routes'] as const,
-  route: (origin: Coordinates | null, destination: Coordinates | null) =>
-    [
-      ...deliveryKeys.routes(),
-      origin ? `${origin.latitude.toFixed(4)},${origin.longitude.toFixed(4)}` : 'null',
-      destination ? `${destination.latitude.toFixed(4)},${destination.longitude.toFixed(4)}` : 'null',
-    ] as const,
-};
+import { deliveryKeys } from '../types/keys';
+export { deliveryKeys };
 
 /**
  * Hook to fetch deliveries list with TanStack caching
@@ -175,6 +160,40 @@ export function useUpdateDeliveryStatusMutation(): UseMutationResult<
 
       // Invalidate logs
       queryClient.invalidateQueries({ queryKey: deliveryKeys.logs(updatedDelivery.id) });
+    },
+  });
+}
+
+/**
+ * Hook to verify the 4-digit reception code dictated to courier and complete last-mile delivery
+ */
+export function useVerifyReceptionCodeMutation(): UseMutationResult<
+  { success: boolean; delivery?: Delivery; error?: string },
+  Error,
+  { deliveryId: string; inputCode: string }
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ deliveryId, inputCode }) =>
+      verifyAndCompleteDelivery(deliveryId, inputCode),
+    onSuccess: (result) => {
+      if (result.success && result.delivery) {
+        const updatedDelivery = result.delivery;
+
+        // Update list cache
+        queryClient.setQueriesData<Delivery[]>({ queryKey: deliveryKeys.lists() }, (old) => {
+          if (!old) return [];
+          return old.map((d) => (d.id === updatedDelivery.id ? updatedDelivery : d));
+        });
+
+        // Update detail cache
+        queryClient.setQueryData(deliveryKeys.detail(updatedDelivery.id), updatedDelivery);
+        queryClient.setQueryData(deliveryKeys.detail(updatedDelivery.tracking_code), updatedDelivery);
+
+        // Invalidate logs
+        queryClient.invalidateQueries({ queryKey: deliveryKeys.logs(updatedDelivery.id) });
+      }
     },
   });
 }

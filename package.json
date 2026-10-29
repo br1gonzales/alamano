@@ -8,6 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit",
+    "test": "tsx --test tests/lastMileDelivery.test.ts",
     "build:web": "npx expo export --platform web"
   },
   "dependencies": {
@@ -27,7 +28,9 @@
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
     "@types/react": "~19.2.2",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   },
   "private": true

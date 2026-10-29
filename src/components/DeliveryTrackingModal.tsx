@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Image,
   Linking,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import {
   X,
@@ -24,10 +25,17 @@ import {
   ShieldCheck,
   Play,
   RotateCcw,
+  KeyRound,
+  Lock,
+  AlertTriangle,
 } from 'lucide-react-native';
 import { Delivery, DeliveryStatus } from '../types/database';
 import { CabifyMap } from './CabifyMap';
-import { useUpdateDeliveryStatusMutation, useDeliveryLogsQuery } from '../hooks/useDeliveries';
+import {
+  useUpdateDeliveryStatusMutation,
+  useVerifyReceptionCodeMutation,
+  useDeliveryLogsQuery,
+} from '../hooks/useDeliveries';
 
 interface DeliveryTrackingModalProps {
   delivery: Delivery | null;
@@ -47,7 +55,11 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
   onClose,
 }) => {
   const updateStatusMutation = useUpdateDeliveryStatusMutation();
+  const verifyCodeMutation = useVerifyReceptionCodeMutation();
   const { data: logs = [] } = useDeliveryLogsQuery(delivery?.id || null);
+
+  const [inputReceptionCode, setInputReceptionCode] = useState('');
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   if (!delivery) return null;
 
@@ -77,8 +89,9 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
       nextStatus = 'in_transit';
       note = 'Pedido empacado y en camino al cliente';
     } else if (delivery.status === 'in_transit') {
-      nextStatus = 'delivered';
-      note = 'Pedido entregado en puerta al destinatario';
+      // In transit: must enter reception code!
+      setCodeError('Para completar la entrega, el cliente debe dictar el código de recepción de 4 dígitos.');
+      return;
     }
 
     updateStatusMutation.mutate({
@@ -86,6 +99,29 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
       status: nextStatus,
       note,
     });
+  };
+
+  const handleVerifyReception = () => {
+    if (inputReceptionCode.trim().length !== 4) {
+      setCodeError('Ingresa el código de 4 dígitos completo.');
+      return;
+    }
+    setCodeError(null);
+    verifyCodeMutation.mutate(
+      { deliveryId: delivery.id, inputCode: inputReceptionCode.trim() },
+      {
+        onSuccess: (res) => {
+          if (!res.success) {
+            setCodeError(res.error || 'Código incorrecto. Vuelve a consultar al cliente.');
+          } else {
+            setInputReceptionCode('');
+          }
+        },
+        onError: (err) => {
+          setCodeError(err.message);
+        },
+      }
+    );
   };
 
   const cancelDelivery = () => {
@@ -306,21 +342,111 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
               </View>
             </View>
 
+            {/* Reception Security Code Section */}
+            {delivery.reception_code && (
+              <View style={styles.receptionCard}>
+                <View style={styles.receptionHeader}>
+                  <KeyRound size={16} color="#F59E0B" />
+                  <Text style={styles.receptionTitle}>
+                    CÓDIGO DE RECEPCIÓN DEL PAQUETE
+                  </Text>
+                </View>
+                <Text style={styles.receptionSubtitle}>
+                  El cliente debe dictar este código al mensajero al momento de recibir el pedido:
+                </Text>
+                <View style={styles.codeDigitsRow}>
+                  {delivery.reception_code.split('').map((digit, i) => (
+                    <View key={i} style={styles.codeDigitBox}>
+                      <Text style={styles.codeDigitText}>{digit}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Last Mile Handover Input (when In Transit or Arrived) */}
+            {delivery.status === 'in_transit' && (
+              <View style={styles.handoverCard}>
+                <View style={styles.handoverHeader}>
+                  <ShieldCheck size={16} color="#8B5CF6" />
+                  <Text style={styles.handoverTitle}>CONFIRMAR ENTREGA ÚLTIMA MILLA</Text>
+                </View>
+                <Text style={styles.handoverDesc}>
+                  Mensajero: Pídele al cliente el código de 4 dígitos para validar la recepción:
+                </Text>
+                <View style={styles.handoverInputRow}>
+                  <TextInput
+                    style={styles.handoverInput}
+                    value={inputReceptionCode}
+                    onChangeText={(t) => {
+                      setInputReceptionCode(t);
+                      setCodeError(null);
+                    }}
+                    placeholder="Código (4 dígitos)"
+                    placeholderTextColor="#64748B"
+                    keyboardType="number-pad"
+                    maxLength={4}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.handoverVerifyBtn,
+                      inputReceptionCode.trim().length !== 4 && styles.handoverBtnDisabled,
+                    ]}
+                    onPress={handleVerifyReception}
+                    disabled={verifyCodeMutation.isPending || inputReceptionCode.trim().length !== 4}
+                  >
+                    {verifyCodeMutation.isPending ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} color="#FFFFFF" />
+                        <Text style={styles.handoverBtnText}>Confirmar</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {codeError && (
+                  <View style={styles.codeErrorBanner}>
+                    <AlertTriangle size={14} color="#EF4444" />
+                    <Text style={styles.codeErrorText}>{codeError}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Delivered Success Stamp */}
+            {delivery.status === 'delivered' && (
+              <View style={styles.deliveredSuccessBanner}>
+                <CheckCircle2 size={20} color="#10B981" />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.deliveredSuccessTitle}>
+                    ¡Paquete Entregado y Verificado!
+                  </Text>
+                  <Text style={styles.deliveredSuccessSub}>
+                    Entrega confirmada con código de seguridad ({delivery.reception_code}).
+                  </Text>
+                </View>
+              </View>
+            )}
+
             {/* Dispatcher Actions */}
             {delivery.status !== 'delivered' && delivery.status !== 'cancelled' && (
               <View style={styles.actionButtonsWrap}>
-                <TouchableOpacity
-                  style={styles.advanceStatusBtn}
-                  onPress={advanceToNextStatus}
-                  disabled={updateStatusMutation.isPending}
-                >
-                  <Play size={16} color="#FFFFFF" />
-                  <Text style={styles.advanceStatusText}>
-                    {updateStatusMutation.isPending
-                      ? 'Actualizando...'
-                      : 'Simular Siguiente Estado de Repartidor'}
-                  </Text>
-                </TouchableOpacity>
+                {delivery.status !== 'in_transit' && (
+                  <TouchableOpacity
+                    style={styles.advanceStatusBtn}
+                    onPress={advanceToNextStatus}
+                    disabled={updateStatusMutation.isPending}
+                  >
+                    <Play size={16} color="#FFFFFF" />
+                    <Text style={styles.advanceStatusText}>
+                      {updateStatusMutation.isPending
+                        ? 'Actualizando...'
+                        : 'Simular Siguiente Estado de Repartidor'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={styles.cancelBtn}
@@ -615,5 +741,150 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 13,
     fontWeight: '600',
+  },
+  receptionCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    marginVertical: 8,
+  },
+  receptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  receptionTitle: {
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  receptionSubtitle: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  codeDigitsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  codeDigitBox: {
+    width: 52,
+    height: 58,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  codeDigitText: {
+    color: '#F8FAFC',
+    fontSize: 26,
+    fontWeight: '800',
+  },
+  handoverCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#8B5CF6',
+    marginVertical: 8,
+  },
+  handoverHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  handoverTitle: {
+    color: '#C4B5FD',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  handoverDesc: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  handoverInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  handoverInput: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 2,
+    borderWidth: 1,
+    borderColor: '#475569',
+    textAlign: 'center',
+  },
+  handoverVerifyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    gap: 6,
+  },
+  handoverBtnDisabled: {
+    opacity: 0.5,
+  },
+  handoverBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  codeErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  codeErrorText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  deliveredSuccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#10B981',
+    marginVertical: 8,
+  },
+  deliveredSuccessTitle: {
+    color: '#10B981',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  deliveredSuccessSub: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    marginTop: 2,
   },
 });
