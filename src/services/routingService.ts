@@ -1,5 +1,61 @@
 import { Coordinates, RouteInfo } from '../types/database';
 
+export const ALLOWED_DISTRICTS = ['miraflores', 'barranco', 'surquillo'] as const;
+export type AllowedDistrict = (typeof ALLOWED_DISTRICTS)[number];
+
+// Bounding box for initial coverage: Miraflores, Barranco, and Surquillo
+export const COVERED_AREA_BOUNDS = {
+  minLat: -12.165, // Southern border of Barranco
+  maxLat: -12.100, // Northern border of Surquillo (Av. Aramburú / Angamos)
+  minLng: -77.060, // Pacific Ocean coastline (Miraflores & Barranco)
+  maxLng: -76.995, // Eastern border of Surquillo (Av. Tomás Marsano / La Calera)
+};
+
+/**
+ * Checks whether given coordinates or district name fall within the allowed coverage boundary
+ */
+export function isWithinCoveredArea(
+  coords: Coordinates,
+  districtText?: string
+): {
+  isCovered: boolean;
+  district?: string;
+  reason?: string;
+} {
+  const cleanDistrict = (districtText || '').toLowerCase().trim();
+  const matchedDistrict = ALLOWED_DISTRICTS.find((d) => cleanDistrict.includes(d));
+
+  if (matchedDistrict) {
+    const capitalized =
+      matchedDistrict.charAt(0).toUpperCase() + matchedDistrict.slice(1);
+    return { isCovered: true, district: capitalized };
+  }
+
+  // Check coordinates against geographical bounding box
+  const inLat =
+    coords.latitude >= COVERED_AREA_BOUNDS.minLat &&
+    coords.latitude <= COVERED_AREA_BOUNDS.maxLat;
+  const inLng =
+    coords.longitude >= COVERED_AREA_BOUNDS.minLng &&
+    coords.longitude <= COVERED_AREA_BOUNDS.maxLng;
+
+  if (inLat && inLng) {
+    let inferred = 'Miraflores';
+    if (coords.latitude < -12.138) {
+      inferred = 'Barranco';
+    } else if (coords.longitude > -77.025 && coords.latitude > -12.122) {
+      inferred = 'Surquillo';
+    }
+    return { isCovered: true, district: inferred };
+  }
+
+  return {
+    isCovered: false,
+    reason:
+      'Dirección fuera de cobertura. La zona inicial habilitada solo incluye Miraflores, Barranco y Surquillo.',
+  };
+}
+
 export interface PresetLocation {
   id: string;
   name: string;
@@ -9,11 +65,12 @@ export interface PresetLocation {
   type: 'restaurant' | 'hub' | 'residential';
 }
 
-// Preset popular gastronomic & commercial hubs in Lima for fast restaurant testing
+// Preset popular gastronomic and residential hubs exclusively in Miraflores, Barranco, and Surquillo
 export const PRESET_LOCATIONS: PresetLocation[] = [
+  // MIRAFLORES
   {
     id: 'miraflores-lamar',
-    name: 'Av. La Mar (Corredor Gastronómico)',
+    name: 'Av. La Mar (Zona Gastronómica)',
     district: 'Miraflores',
     address: 'Av. La Mar 1263, Miraflores',
     coordinates: { latitude: -12.1154, longitude: -77.0428 },
@@ -21,51 +78,69 @@ export const PRESET_LOCATIONS: PresetLocation[] = [
   },
   {
     id: 'miraflores-kennedy',
-    name: 'Parque Kennedy / Óvalo de Miraflores',
+    name: 'Parque Kennedy / Óvalo Miraflores',
     district: 'Miraflores',
     address: 'Diagonal 340, Miraflores',
     coordinates: { latitude: -12.1215, longitude: -77.0295 },
     type: 'hub',
   },
   {
-    id: 'san-isidro-dasso',
-    name: 'Calle Miguel Dasso (Zona Gourmet)',
-    district: 'San Isidro',
-    address: 'Calle Miguel Dasso 155, San Isidro',
-    coordinates: { latitude: -12.0991, longitude: -77.0372 },
+    id: 'miraflores-larcomar',
+    name: 'Larcomar / Malecón de la Reserva',
+    district: 'Miraflores',
+    address: 'Malecón de la Reserva 610, Miraflores',
+    coordinates: { latitude: -12.1328, longitude: -77.0305 },
+    type: 'restaurant',
+  },
+  // SURQUILLO
+  {
+    id: 'surquillo-mercado1',
+    name: 'Mercado N° 1 de Surquillo (Huariques)',
+    district: 'Surquillo',
+    address: 'Ca. Lizardo Montero 705, Surquillo',
+    coordinates: { latitude: -12.1121, longitude: -77.0267 },
     type: 'restaurant',
   },
   {
-    id: 'barranco-pedro-osma',
-    name: 'Av. Pedro de Osma',
+    id: 'surquillo-villaran',
+    name: 'Av. Manuel Villarán / Barrio Médico',
+    district: 'Surquillo',
+    address: 'Av. Manuel Villarán 802, Surquillo',
+    coordinates: { latitude: -12.1158, longitude: -77.0098 },
+    type: 'residential',
+  },
+  {
+    id: 'surquillo-calera',
+    name: 'La Calera de la Merced',
+    district: 'Surquillo',
+    address: 'Calle Las Tiendas 250, Surquillo',
+    coordinates: { latitude: -12.1092, longitude: -77.0145 },
+    type: 'residential',
+  },
+  // BARRANCO
+  {
+    id: 'barranco-plaza',
+    name: 'Plaza de Armas de Barranco',
+    district: 'Barranco',
+    address: 'Av. Pedro de Osma 102, Barranco',
+    coordinates: { latitude: -12.1489, longitude: -77.021 },
+    type: 'hub',
+  },
+  {
+    id: 'barranco-osma',
+    name: 'Av. Pedro de Osma (Zona Bohemia)',
     district: 'Barranco',
     address: 'Av. Pedro de Osma 409, Barranco',
     coordinates: { latitude: -12.1518, longitude: -77.0217 },
     type: 'restaurant',
   },
   {
-    id: 'surco-chacarilla',
-    name: 'Chacarilla del Estanque',
-    district: 'Santiago de Surco',
-    address: 'Av. Primavera 640, Surco',
-    coordinates: { latitude: -12.1105, longitude: -76.9936 },
-    type: 'residential',
-  },
-  {
-    id: 'san-borja-aviacion',
-    name: 'Av. Aviación & Javier Prado',
-    district: 'San Borja',
-    address: 'Av. Aviación 2500, San Borja',
-    coordinates: { latitude: -12.0886, longitude: -77.0012 },
-    type: 'residential',
-  },
-  {
-    id: 'magdalena-mercado',
-    name: 'Mercado de Magdalena',
-    district: 'Magdalena del Mar',
-    address: 'Jr. Bolognesi 502, Magdalena del Mar',
-    coordinates: { latitude: -12.0911, longitude: -77.0706 },
-    type: 'hub',
+    id: 'barranco-grau',
+    name: 'Av. Grau / Dédalo Arte & Café',
+    district: 'Barranco',
+    address: 'Av. Almirante Grau 610, Barranco',
+    coordinates: { latitude: -12.1445, longitude: -77.0232 },
+    type: 'restaurant',
   },
 ];
 
@@ -102,13 +177,12 @@ function generateSimulatedRoadRoute(
   const result: [number, number][] = [];
   const midLat = (start.latitude + end.latitude) / 2;
   const midLng = (start.longitude + end.longitude) / 2;
-  
+
   // Slight curve offset to simulate real street turns
   const offset = 0.002;
 
   for (let i = 0; i <= points; i++) {
     const t = i / points;
-    // Quadratic bezier curve
     const lat =
       (1 - t) * (1 - t) * start.latitude +
       2 * (1 - t) * t * (midLat + offset) +
@@ -148,8 +222,6 @@ export async function getRouteBetweenPoints(
         const distanceMiles = kmToMiles(distanceKm);
         const durationMinutes = Math.max(1, Math.round(route.duration / 60));
 
-        // OSRM coordinates are in [longitude, latitude] GeoJSON format.
-        // Convert to [latitude, longitude] for map rendering
         const coordinates: [number, number][] = route.geometry.coordinates.map(
           (pt: [number, number]) => [pt[1], pt[0]]
         );
@@ -159,7 +231,7 @@ export async function getRouteBetweenPoints(
           distanceMiles,
           durationMinutes,
           coordinates,
-          summary: route.legs?.[0]?.summary || 'Vía principal',
+          summary: route.legs?.[0]?.summary || 'Vía urbana',
         };
       }
     }
@@ -167,11 +239,10 @@ export async function getRouteBetweenPoints(
     console.warn('OSRM routing request failed, falling back to simulated road route:', err);
   }
 
-  // Fallback: Haversine with 1.35x urban road tortuosity
+  // Fallback: Haversine with 1.35x urban road factor
   const straightKm = calculateHaversineDistanceKm(origin, destination);
   const roadDistanceKm = Number((straightKm * 1.35).toFixed(2));
   const distanceMiles = kmToMiles(roadDistanceKm);
-  // Estimated courier speed: 28 km/h in city traffic
   const durationMinutes = Math.max(3, Math.round((roadDistanceKm / 28) * 60) + 4);
   const coordinates = generateSimulatedRoadRoute(origin, destination);
 
@@ -180,25 +251,28 @@ export async function getRouteBetweenPoints(
     distanceMiles,
     durationMinutes,
     coordinates,
-    summary: 'Ruta estimada en vía urbana',
+    summary: 'Ruta estimada en zona de cobertura',
   };
 }
 
+export interface AddressSearchResult {
+  displayName: string;
+  latitude: number;
+  longitude: number;
+  district?: string;
+  isCovered: boolean;
+}
+
 /**
- * Geocode address query using Nominatim OpenStreetMap
+ * Geocode address query using Nominatim OpenStreetMap filtered by the covered area
  */
-export async function searchAddress(query: string): Promise<
-  Array<{
-    displayName: string;
-    latitude: number;
-    longitude: number;
-  }>
-> {
+export async function searchAddress(query: string): Promise<AddressSearchResult[]> {
   if (!query || query.trim().length < 3) return [];
 
-  // Check preset locations first
   const cleanQuery = query.toLowerCase().trim();
-  const matchedPresets = PRESET_LOCATIONS.filter(
+
+  // 1. Filter preset locations
+  const matchedPresets: AddressSearchResult[] = PRESET_LOCATIONS.filter(
     (p) =>
       p.name.toLowerCase().includes(cleanQuery) ||
       p.address.toLowerCase().includes(cleanQuery) ||
@@ -207,29 +281,44 @@ export async function searchAddress(query: string): Promise<
     displayName: `${p.name} (${p.address})`,
     latitude: p.coordinates.latitude,
     longitude: p.coordinates.longitude,
+    district: p.district,
+    isCovered: true,
   }));
 
+  // 2. Query Nominatim prioritizing the covered boundary viewbox
   try {
     const encoded = encodeURIComponent(`${query}, Lima, Peru`);
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encoded}&limit=5`,
-      {
-        headers: {
-          'User-Agent': 'AlamanoDeliveryApp/1.0',
-        },
-      }
-    );
+    // viewbox: left,top,right,bottom
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encoded}&limit=8&viewbox=-77.060,-12.100,-76.995,-12.165`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'AlamanoDeliveryApp/1.0',
+      },
+    });
 
     if (res.ok) {
       const items = await res.json();
-      const nominatimResults = items.map((item: any) => ({
-        displayName: item.display_name,
-        latitude: parseFloat(item.lat),
-        longitude: parseFloat(item.lon),
-      }));
+      const nominatimResults: AddressSearchResult[] = items.map((item: any) => {
+        const lat = parseFloat(item.lat);
+        const lon = parseFloat(item.lon);
+        const coverage = isWithinCoveredArea(
+          { latitude: lat, longitude: lon },
+          item.display_name
+        );
 
-      // Merge presets first, then OSM results without duplicates
-      return [...matchedPresets, ...nominatimResults].slice(0, 6);
+        return {
+          displayName: item.display_name,
+          latitude: lat,
+          longitude: lon,
+          district: coverage.district,
+          isCovered: coverage.isCovered,
+        };
+      });
+
+      // Place covered results first
+      const allResults = [...matchedPresets, ...nominatimResults];
+      allResults.sort((a, b) => (b.isCovered ? 1 : 0) - (a.isCovered ? 1 : 0));
+      return allResults.slice(0, 7);
     }
   } catch (err) {
     console.warn('Geocoding search failed:', err);

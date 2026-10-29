@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   FlatList,
   Modal,
+  Alert,
 } from 'react-native';
 import {
   MapPin,
@@ -19,12 +20,17 @@ import {
   ArrowRight,
   Clock,
   Sparkles,
+  Shield,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react-native';
 import { Coordinates, RouteInfo } from '../types/database';
 import {
   searchAddress,
+  isWithinCoveredArea,
   PRESET_LOCATIONS,
   PresetLocation,
+  AddressSearchResult,
 } from '../services/routingService';
 
 interface AddressInputCardProps {
@@ -50,10 +56,16 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
 }) => {
   const [activePicker, setActivePicker] = useState<'origin' | 'destination' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<
-    Array<{ displayName: string; latitude: number; longitude: number }>
-  >([]);
+  const [suggestions, setSuggestions] = useState<AddressSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+
+  // Coverage checks for currently selected points
+  const originCoverage = origin
+    ? isWithinCoveredArea(origin, originAddress)
+    : null;
+  const destinationCoverage = destination
+    ? isWithinCoveredArea(destination, destinationAddress)
+    : null;
 
   // Debounced address search
   useEffect(() => {
@@ -79,7 +91,20 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
     setSuggestions([]);
   };
 
-  const selectSuggestion = (name: string, lat: number, lng: number) => {
+  const selectSuggestion = (
+    name: string,
+    lat: number,
+    lng: number,
+    isCovered: boolean
+  ) => {
+    if (!isCovered) {
+      Alert.alert(
+        'Zona Fuera de Cobertura',
+        'Por el momento el servicio de entrega solo está habilitado en los distritos de Surquillo, Miraflores y Barranco.',
+        [{ text: 'Entendido' }]
+      );
+    }
+
     if (activePicker === 'origin') {
       onSelectOrigin(name, { latitude: lat, longitude: lng });
     } else if (activePicker === 'destination') {
@@ -89,11 +114,24 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
   };
 
   const selectPreset = (preset: PresetLocation) => {
-    selectSuggestion(preset.address, preset.coordinates.latitude, preset.coordinates.longitude);
+    selectSuggestion(
+      preset.address,
+      preset.coordinates.latitude,
+      preset.coordinates.longitude,
+      true
+    );
   };
 
   return (
     <View style={styles.card}>
+      {/* Covered Area Badge Pill */}
+      <View style={styles.coverageBadgeRow}>
+        <Shield size={13} color="#10B981" />
+        <Text style={styles.coverageBadgeText}>
+          Zona de cobertura habilitada: Surquillo • Miraflores • Barranco
+        </Text>
+      </View>
+
       {/* Dual Address Container with Cabify Connected Dots */}
       <View style={styles.addressInputsWrapper}>
         {/* Left Side: Connected Dots & Line */}
@@ -112,7 +150,32 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
             activeOpacity={0.7}
           >
             <View style={styles.fieldContent}>
-              <Text style={styles.fieldLabel}>PUNTO DE RECOJO (RESTAURANTE)</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.fieldLabel}>PUNTO DE RECOJO (RESTAURANTE)</Text>
+                {originCoverage && (
+                  <View
+                    style={[
+                      styles.districtTag,
+                      originCoverage.isCovered
+                        ? styles.districtTagCovered
+                        : styles.districtTagOut,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.districtTagText,
+                        originCoverage.isCovered
+                          ? styles.districtTagTextCovered
+                          : styles.districtTagTextOut,
+                      ]}
+                    >
+                      {originCoverage.isCovered
+                        ? originCoverage.district
+                        : 'Fuera de zona'}
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Text
                 style={[
                   styles.fieldText,
@@ -135,7 +198,32 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
             activeOpacity={0.7}
           >
             <View style={styles.fieldContent}>
-              <Text style={styles.fieldLabel}>PUNTO DE ENTREGA (CLIENTE)</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.fieldLabel}>PUNTO DE ENTREGA (CLIENTE)</Text>
+                {destinationCoverage && (
+                  <View
+                    style={[
+                      styles.districtTag,
+                      destinationCoverage.isCovered
+                        ? styles.districtTagCovered
+                        : styles.districtTagOut,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.districtTagText,
+                        destinationCoverage.isCovered
+                          ? styles.districtTagTextCovered
+                          : styles.districtTagTextOut,
+                      ]}
+                    >
+                      {destinationCoverage.isCovered
+                        ? destinationCoverage.district
+                        : 'Fuera de zona'}
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Text
                 style={[
                   styles.fieldText,
@@ -151,6 +239,17 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
         </View>
       </View>
 
+      {/* Coverage Warning Banner if either address is outside */}
+      {((originCoverage && !originCoverage.isCovered) ||
+        (destinationCoverage && !destinationCoverage.isCovered)) && (
+        <View style={styles.coverageWarningBanner}>
+          <AlertTriangle size={15} color="#EF4444" />
+          <Text style={styles.coverageWarningText}>
+            Una de las direcciones está fuera del área inicial de cobertura (Solo Surquillo, Miraflores y Barranco).
+          </Text>
+        </View>
+      )}
+
       {/* Live Distance & Duration Banner */}
       {isLoadingRoute && (
         <View style={styles.loadingBanner}>
@@ -163,9 +262,7 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
         <View style={styles.routeStatsRow}>
           <View style={styles.statChipPrimary}>
             <Navigation size={16} color="#10B981" />
-            <Text style={styles.statDistanceKm}>
-              {routeInfo.distanceKm} km
-            </Text>
+            <Text style={styles.statDistanceKm}>{routeInfo.distanceKm} km</Text>
             <Text style={styles.statDistanceMiles}>
               ({routeInfo.distanceMiles} millas)
             </Text>
@@ -186,11 +283,16 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
           <View style={styles.modalContent}>
             {/* Header */}
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {activePicker === 'origin'
-                  ? 'Seleccionar Punto de Recojo'
-                  : 'Seleccionar Punto de Entrega'}
-              </Text>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {activePicker === 'origin'
+                    ? 'Seleccionar Punto de Recojo'
+                    : 'Seleccionar Punto de Entrega'}
+                </Text>
+                <Text style={styles.modalSub}>
+                  Área disponible: Surquillo, Miraflores y Barranco
+                </Text>
+              </View>
               <TouchableOpacity
                 onPress={() => setActivePicker(null)}
                 style={styles.closeBtn}
@@ -204,7 +306,7 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
               <Search size={18} color="#94A3B8" />
               <TextInput
                 style={styles.modalSearchInput}
-                placeholder="Escribe calle, avenida o referencia..."
+                placeholder="Calle, avenida o restaurante (Ej. La Mar, Villarán, Grau)..."
                 placeholderTextColor="#64748B"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -221,7 +323,7 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
             {isSearching ? (
               <View style={styles.searchingBox}>
                 <ActivityIndicator size="small" color="#8B5CF6" />
-                <Text style={styles.searchingText}>Buscando direcciones...</Text>
+                <Text style={styles.searchingText}>Buscando en zona de cobertura...</Text>
               </View>
             ) : suggestions.length > 0 ? (
               <FlatList
@@ -229,14 +331,43 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
                 keyExtractor={(_, idx) => `sugg-${idx}`}
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={styles.suggestionItem}
+                    style={[
+                      styles.suggestionItem,
+                      !item.isCovered && styles.suggestionItemOut,
+                    ]}
                     onPress={() =>
-                      selectSuggestion(item.displayName, item.latitude, item.longitude)
+                      selectSuggestion(
+                        item.displayName,
+                        item.latitude,
+                        item.longitude,
+                        item.isCovered
+                      )
                     }
                   >
-                    <MapPin size={18} color="#8B5CF6" style={{ marginTop: 2 }} />
+                    <MapPin
+                      size={18}
+                      color={item.isCovered ? '#8B5CF6' : '#EF4444'}
+                      style={{ marginTop: 2 }}
+                    />
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text style={styles.suggestionText}>{item.displayName}</Text>
+                      <View style={styles.itemTagRow}>
+                        {item.isCovered ? (
+                          <View style={styles.itemCoveredTag}>
+                            <CheckCircle2 size={10} color="#10B981" />
+                            <Text style={styles.itemCoveredTagText}>
+                              {item.district || 'Zona cubierta'}
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.itemOutTag}>
+                            <AlertTriangle size={10} color="#EF4444" />
+                            <Text style={styles.itemOutTagText}>
+                              Fuera de cobertura
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                   </TouchableOpacity>
                 )}
@@ -246,7 +377,7 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
                 <View style={styles.presetsHeaderRow}>
                   <Sparkles size={16} color="#F59E0B" />
                   <Text style={styles.presetsTitle}>
-                    Puntos frecuentes recomendados en Lima
+                    Puntos frecuentes en Surquillo, Miraflores y Barranco
                   </Text>
                 </View>
 
@@ -265,9 +396,16 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
                     </View>
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text style={styles.presetName}>{preset.name}</Text>
-                      <Text style={styles.presetSub}>{preset.address} • {preset.district}</Text>
+                      <Text style={styles.presetSub}>
+                        {preset.address} • {preset.district}
+                      </Text>
                     </View>
-                    <ArrowRight size={16} color="#475569" />
+                    <View style={styles.presetDistrictPill}>
+                      <Text style={styles.presetDistrictPillText}>
+                        {preset.district}
+                      </Text>
+                    </View>
+                    <ArrowRight size={14} color="#475569" style={{ marginLeft: 6 }} />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -287,6 +425,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
     marginVertical: 8,
+  },
+  coverageBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+    marginBottom: 12,
+  },
+  coverageBadgeText: {
+    color: '#6EE7B7',
+    fontSize: 11,
+    fontWeight: '600',
   },
   addressInputsWrapper: {
     flexDirection: 'row',
@@ -333,12 +488,39 @@ const styles = StyleSheet.create({
   fieldContent: {
     flex: 1,
   },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
   fieldLabel: {
     color: '#94A3B8',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
-    marginBottom: 2,
+  },
+  districtTag: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  districtTagCovered: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  districtTagOut: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  districtTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  districtTagTextCovered: {
+    color: '#10B981',
+  },
+  districtTagTextOut: {
+    color: '#EF4444',
   },
   fieldText: {
     color: '#F8FAFC',
@@ -353,6 +535,24 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#334155',
     marginVertical: 4,
+  },
+  coverageWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  coverageWarningText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '500',
+    flex: 1,
   },
   loadingBanner: {
     flexDirection: 'row',
@@ -422,7 +622,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '85%',
+    maxHeight: '88%',
     padding: 20,
     borderWidth: 1,
     borderColor: '#334155',
@@ -430,13 +630,18 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
   modalTitle: {
     color: '#F8FAFC',
     fontSize: 16,
     fontWeight: '700',
+  },
+  modalSub: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 2,
   },
   closeBtn: {
     padding: 6,
@@ -474,9 +679,44 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#334155',
   },
+  suggestionItemOut: {
+    opacity: 0.6,
+  },
   suggestionText: {
     color: '#F1F5F9',
     fontSize: 14,
+  },
+  itemTagRow: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  itemCoveredTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  itemCoveredTagText: {
+    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  itemOutTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  itemOutTagText: {
+    color: '#EF4444',
+    fontSize: 10,
+    fontWeight: '600',
   },
   presetsContainer: {
     marginTop: 4,
@@ -489,7 +729,7 @@ const styles = StyleSheet.create({
   },
   presetsTitle: {
     color: '#F59E0B',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
@@ -521,5 +761,18 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 11,
     marginTop: 2,
+  },
+  presetDistrictPill: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+  },
+  presetDistrictPillText: {
+    color: '#C4B5FD',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });

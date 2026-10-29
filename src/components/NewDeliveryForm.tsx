@@ -28,7 +28,7 @@ import {
   useCreateDeliveryMutation,
   useStoresQuery,
 } from '../hooks/useDeliveries';
-import { PRESET_LOCATIONS } from '../services/routingService';
+import { PRESET_LOCATIONS, isWithinCoveredArea } from '../services/routingService';
 
 interface NewDeliveryFormProps {
   onDeliveryCreated: (delivery: Delivery) => void;
@@ -77,6 +77,11 @@ export const NewDeliveryForm: React.FC<NewDeliveryFormProps> = ({
   // TanStack Query mutation for creating delivery
   const createDeliveryMutation = useCreateDeliveryMutation();
 
+  // District Coverage Validation (Only Surquillo, Miraflores, Barranco)
+  const originCoverage = isWithinCoveredArea(originCoords, originAddress);
+  const destinationCoverage = isWithinCoveredArea(destinationCoords, destinationAddress);
+  const isTripAllowed = originCoverage.isCovered && destinationCoverage.isCovered;
+
   // If stores loaded and none selected, auto-select first or match
   useEffect(() => {
     if (stores.length > 0 && !selectedStoreId) {
@@ -98,6 +103,13 @@ export const NewDeliveryForm: React.FC<NewDeliveryFormProps> = ({
   const handleDispatch = () => {
     if (!originAddress || !destinationAddress) {
       Alert.alert('Falta dirección', 'Por favor ingresa punto de origen y punto de entrega.');
+      return;
+    }
+    if (!isTripAllowed) {
+      Alert.alert(
+        'Ruta Fuera de Cobertura',
+        'Por el momento solo se permite planificar viajes dentro de los distritos iniciales: Surquillo, Miraflores y Barranco.'
+      );
       return;
     }
     if (!recipientName || !recipientPhone) {
@@ -278,14 +290,22 @@ export const NewDeliveryForm: React.FC<NewDeliveryFormProps> = ({
       <TouchableOpacity
         style={[
           styles.submitButton,
-          createDeliveryMutation.isPending && styles.submitButtonDisabled,
+          (!isTripAllowed || createDeliveryMutation.isPending) && styles.submitButtonDisabled,
+          !isTripAllowed && styles.submitButtonBlocked,
         ]}
         onPress={handleDispatch}
-        disabled={createDeliveryMutation.isPending}
+        disabled={!isTripAllowed || createDeliveryMutation.isPending}
         activeOpacity={0.8}
       >
         {createDeliveryMutation.isPending ? (
           <ActivityIndicator color="#FFFFFF" />
+        ) : !isTripAllowed ? (
+          <>
+            <AlertTriangle size={18} color="#FFFFFF" />
+            <Text style={styles.submitButtonText}>
+              Fuera de Cobertura (Solo Surquillo, Miraflores y Barranco)
+            </Text>
+          </>
         ) : (
           <>
             <Send size={18} color="#FFFFFF" />
@@ -424,6 +444,12 @@ const styles = StyleSheet.create({
   },
   submitButtonDisabled: {
     opacity: 0.6,
+  },
+  submitButtonBlocked: {
+    backgroundColor: '#7F1D1D',
+    borderColor: '#EF4444',
+    borderWidth: 1,
+    shadowColor: '#EF4444',
   },
   submitButtonText: {
     color: '#FFFFFF',

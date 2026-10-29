@@ -10,6 +10,8 @@ import {
   calculateHaversineDistanceKm,
   kmToMiles,
   PRESET_LOCATIONS,
+  isWithinCoveredArea,
+  ALLOWED_DISTRICTS,
 } from '../src/services/routingService';
 import { deliveryKeys } from '../src/types/keys';
 import { DeliveryStatus } from '../src/types/database';
@@ -173,6 +175,68 @@ describe('Last-Mile Delivery Flow & Package Reception Verification', () => {
 
       assert.deepEqual(key1, key2, 'Identical coordinates must yield the exact same cache key');
       assert.equal(key1[0], 'routes');
+    });
+  });
+
+  describe('6. District Boundary & Geofence (Surquillo, Miraflores, Barranco)', () => {
+    it('should define exactly Miraflores, Barranco, and Surquillo as covered districts', () => {
+      assert.deepEqual([...ALLOWED_DISTRICTS], ['miraflores', 'barranco', 'surquillo']);
+    });
+
+    it('should approve addresses located in Miraflores', () => {
+      const mirafloresPt = { latitude: -12.1215, longitude: -77.0295 }; // Parque Kennedy
+      const result = isWithinCoveredArea(mirafloresPt, 'Av. Larco 500, Miraflores');
+      assert.equal(result.isCovered, true);
+      assert.equal(result.district, 'Miraflores');
+    });
+
+    it('should approve addresses located in Barranco', () => {
+      const barrancoPt = { latitude: -12.1489, longitude: -77.021 }; // Plaza Barranco
+      const result = isWithinCoveredArea(barrancoPt, 'Av. Pedro de Osma 102, Barranco');
+      assert.equal(result.isCovered, true);
+      assert.equal(result.district, 'Barranco');
+    });
+
+    it('should approve addresses located in Surquillo', () => {
+      const surquilloPt = { latitude: -12.1121, longitude: -77.0267 }; // Mercado 1 Surquillo
+      const result = isWithinCoveredArea(surquilloPt, 'Ca. Lizardo Montero 705, Surquillo');
+      assert.equal(result.isCovered, true);
+      assert.equal(result.district, 'Surquillo');
+    });
+
+    it('should reject addresses outside the allowed boundary (e.g., San Isidro, San Borja, Los Olivos)', () => {
+      const sanIsidroPt = { latitude: -12.0945, longitude: -77.0345 }; // Dasso / San Isidro centro
+      const resultSanIsidro = isWithinCoveredArea(sanIsidroPt, 'Av. Conquistadores 400, San Isidro');
+      assert.equal(resultSanIsidro.isCovered, false);
+      assert.match(resultSanIsidro.reason || '', /fuera de cobertura/i);
+
+      const losOlivosPt = { latitude: -11.9922, longitude: -77.0711 }; // Los Olivos
+      const resultLosOlivos = isWithinCoveredArea(losOlivosPt, 'Av. Antúnez de Mayolo, Los Olivos');
+      assert.equal(resultLosOlivos.isCovered, false);
+    });
+
+    it('should confirm that all preset locations are within the covered area', () => {
+      for (const preset of PRESET_LOCATIONS) {
+        const check = isWithinCoveredArea(preset.coordinates, preset.district);
+        assert.equal(
+          check.isCovered,
+          true,
+          `Preset "${preset.name}" in district "${preset.district}" must be in covered area`
+        );
+      }
+    });
+
+    it('should allow trip planning between covered districts but block when one end is outside', () => {
+      const pickupMiraflores = { latitude: -12.1154, longitude: -77.0428 };
+      const dropoffSurquillo = { latitude: -12.1121, longitude: -77.0267 };
+      const dropoffSanBorja = { latitude: -12.0886, longitude: -77.0012 };
+
+      const tripValidOrigin = isWithinCoveredArea(pickupMiraflores, 'Miraflores').isCovered;
+      const tripValidDest = isWithinCoveredArea(dropoffSurquillo, 'Surquillo').isCovered;
+      assert.equal(tripValidOrigin && tripValidDest, true, 'Miraflores to Surquillo trip must be allowed');
+
+      const tripInvalidDest = isWithinCoveredArea(dropoffSanBorja, 'San Borja').isCovered;
+      assert.equal(tripValidOrigin && tripInvalidDest, false, 'Miraflores to San Borja trip must be blocked');
     });
   });
 });

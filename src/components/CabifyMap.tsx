@@ -25,6 +25,7 @@ import {
   Bike,
   Clock,
   Compass,
+  Shield,
 } from 'lucide-react-native';
 import { Coordinates, RouteInfo } from '../types/database';
 
@@ -268,6 +269,12 @@ export const CabifyMap: React.FC<CabifyMapProps> = ({
         </View>
       )}
 
+      {/* Coverage Area Tag */}
+      <View style={styles.coveragePill}>
+        <Shield size={11} color="#10B981" />
+        <Text style={styles.coveragePillText}>Surquillo • Miraflores • Barranco</Text>
+      </View>
+
       {/* External Map Action Button */}
       {origin && destination && (
         <TouchableOpacity
@@ -365,5 +372,24 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     fontSize: 11,
     fontWeight: '500',
+  },
+  coveragePill: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+  },
+  coveragePillText: {
+    color: '#6EE7B7',
+    fontSize: 10,
+    fontWeight: '600',
   },
 });
