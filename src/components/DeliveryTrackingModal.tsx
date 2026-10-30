@@ -30,7 +30,7 @@ import {
   AlertTriangle,
 } from 'lucide-react-native';
 import { Delivery, DeliveryStatus } from '../types/database';
-import { CabifyMap } from './CabifyMap';
+import { DeliveryRouteMap } from './DeliveryRouteMap';
 import {
   useUpdateDeliveryStatusMutation,
   useVerifyReceptionCodeMutation,
@@ -197,7 +197,7 @@ export const DeliveryTrackingModal: React.FC<DeliveryTrackingModalProps> = ({
 
           <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
             {/* Live Visual Route Map */}
-            <CabifyMap
+            <DeliveryRouteMap
               origin={originCoords}
               destination={destCoords}
               routeInfo={{

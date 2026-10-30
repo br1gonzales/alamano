@@ -1,4 +1,4 @@
-# 🛵 Alamano — Cabify-like Restaurant Courier Dispatch & Delivery System
+# 🛵 Alamano — Restaurant Courier Dispatch & Delivery System
 
 A logistics & courier dispatch app built for restaurants with **Expo (React Native)**, **TanStack Query (React Query)**, and **Supabase**.
 
@@ -8,7 +8,7 @@ Seamlessly integrated with the **Alacarta** restaurant ecosystem to allow any re
 
 ## 🚀 Key Features
 
-- **Cabify-like Visual Route & Mileage Engine**:
+- **Visual Road Route & Mileage Engine**:
   - Live turn-by-turn road route computation with **OSRM (Open Source Routing Machine)**.
   - Accurate mileage in both **Kilometers** and **Miles** (`kmToMiles`).
   - Travel time estimation according to city traffic and transport speed.
@@ -95,7 +95,7 @@ alamano/
     ├── hooks/
     │   └── useDeliveries.ts     # TanStack Query hooks, query keys & realtime sync
     └── components/
-        ├── CabifyMap.tsx        # Projected SVG map with road polyline & waypoints
+        ├── DeliveryRouteMap.tsx # Projected SVG map with road polyline & waypoints
         ├── AddressInputCard.tsx # Dual address inputs with connected pins & mileage badge
         ├── CourierSelectorCard.tsx # Moto / Bici / Auto selector & scheduler
         ├── NewDeliveryForm.tsx  # Dispatch screen connecting Alacarta stores

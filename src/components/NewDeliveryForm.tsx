@@ -20,7 +20,7 @@ import {
   AlertTriangle,
 } from 'lucide-react-native';
 import { AddressInputCard } from './AddressInputCard';
-import { CabifyMap } from './CabifyMap';
+import { DeliveryRouteMap } from './DeliveryRouteMap';
 import { CourierSelectorCard } from './CourierSelectorCard';
 import { Coordinates, VehicleType, Delivery } from '../types/database';
 import {
@@ -186,8 +186,8 @@ export const NewDeliveryForm: React.FC<NewDeliveryFormProps> = ({
         )}
       </View>
 
-      {/* Visual Cabify Route Map */}
-      <CabifyMap
+      {/* Visual Delivery Route Map */}
+      <DeliveryRouteMap
         origin={originCoords}
         destination={destinationCoords}
         routeInfo={routeInfo || null}

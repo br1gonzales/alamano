@@ -60,7 +60,7 @@ const AlamanoDeliveryApp: React.FC = () => {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={styles.appName}>alamano</Text>
               <View style={styles.taglineBadge}>
-                <Text style={styles.taglineText}>Cabify Courier</Text>
+                <Text style={styles.taglineText}>Envío Express</Text>
               </View>
             </View>
             <Text style={styles.appSub}>

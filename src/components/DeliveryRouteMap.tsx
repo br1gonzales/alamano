@@ -29,7 +29,7 @@ import {
 } from 'lucide-react-native';
 import { Coordinates, RouteInfo } from '../types/database';
 
-interface CabifyMapProps {
+export interface DeliveryRouteMapProps {
   origin: Coordinates | null;
   destination: Coordinates | null;
   routeInfo: RouteInfo | null;
@@ -40,7 +40,7 @@ interface CabifyMapProps {
   height?: number;
 }
 
-export const CabifyMap: React.FC<CabifyMapProps> = ({
+export const DeliveryRouteMap: React.FC<DeliveryRouteMapProps> = ({
   origin,
   destination,
   routeInfo,

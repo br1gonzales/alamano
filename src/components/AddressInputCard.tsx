@@ -132,7 +132,7 @@ export const AddressInputCard: React.FC<AddressInputCardProps> = ({
         </Text>
       </View>
 
-      {/* Dual Address Container with Cabify Connected Dots */}
+      {/* Dual Address Container with Origin and Destination Connected Pins */}
       <View style={styles.addressInputsWrapper}>
         {/* Left Side: Connected Dots & Line */}
         <View style={styles.timelineColumn}>
